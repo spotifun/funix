@@ -1,2 +1,2 @@
 web: elixir --sname server -S mix phx.server
-release: mix phx.digest
+release: POOL_SIZE=2 mix ecto.migrate && mix phx.digest
