@@ -15,7 +15,13 @@ defmodule FunixWeb.MatcherController do
         random_number = Enum.random(100_000..999_999)
         matching_id = get_unique_random_id(random_number, Repo.get_by(Matcher, matching_id: random_number))
         
-        {is_ok, _} = Matcher.changeset(%Matcher{}, %{user_id: user_id, matching_id: matching_id}) |> Repo.insert()
-        json(conn, %{user_id: user_id, matching_id: matching_id, success: is_ok})
+        {status, changeset} = Matcher.changeset(%Matcher{}, %{user_id: user_id, matching_id: matching_id}) |> Repo.insert()
+
+        case status do
+            :ok -> json(conn, %{user_id: user_id, matching_id: matching_id, success: status})
+            :error ->
+                errors = Matcher.translate_error(changeset.errors)
+                json(conn, %{user_id: user_id, matching_id: matching_id, status: status, errors: errors})
+        end
     end
 end
