@@ -19,6 +19,11 @@ defmodule FunixWeb.Router do
     get "/", PageController, :index
   end
 
+  scope "/api", FunixWeb do
+    pipe_through :api
+    post "/matcher/generate", MatcherController, :generate
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", FunixWeb do
   #   pipe_through :api
