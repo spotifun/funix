@@ -17,3 +17,6 @@ defmodule Funix.Matcher do
     |> unique_constraint(:matching_id, [name: :matchers_matching_id_index])
   end
 end
+
+require Protocol
+Protocol.derive(Jason.Encoder, Funix.Matcher, only: [:matching_id, :user_id])
