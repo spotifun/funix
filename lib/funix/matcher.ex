@@ -5,6 +5,7 @@ defmodule Funix.Matcher do
   schema "matchers" do
     field :matching_id, :integer
     field :user_id, :string
+    has_many :matcher_matches, Funix.MatcherMatch
 
     timestamps()
   end

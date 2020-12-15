@@ -38,6 +38,8 @@ defmodule FunixWeb.MatcherController do
         
         case status do
             :ok ->
+                Ecto.build_assoc(changeset, :matcher_matches, %{user_id: user_id}) |> Repo.insert()
+
                 destroy_function = fn () ->
                     Repo.delete(changeset, [stale_error_field: :stale_error])
                 end
@@ -46,21 +48,23 @@ defmodule FunixWeb.MatcherController do
                 json(conn, %{user_id: user_id, matching_id: matching_id, success: status})
             :error ->
                 errors = Util.translate_error(changeset.errors)
-                json(conn, %{user_id: user_id, matching_id: matching_id, status: status, errors: errors})
+                json(conn, %{user_id: user_id, status: status, errors: errors})
+        end
+    end
+
+    defp match_user(conn, user_id, matching_id) do
+        matching = Repo.get_by(Matcher, matching_id: matching_id)            
+        case matching do
+            nil -> 
+                json(conn, %{user_id: user_id, status: :no_match})
+            _ ->
+                json(conn, %{user_id: user_id, status: :matched, match_user_id: matching.user_id})
         end
     end
 
     def match(conn, %{"user_id" => user_id, "matching_id" => matching_id}) do
         case Integer.parse(matching_id) do
-            {_num, ""} ->
-                matching = Repo.get_by(Matcher, matching_id: matching_id)            
-                case matching do
-                    nil -> 
-                        json(conn, %{user_id: user_id, status: :no_match})
-                    _ ->
-                        json(conn, %{user_id: user_id, status: :matched, match_user_id: matching.user_id})
-                end
-            
+            {_num, ""} -> match_user(conn, user_id, matching_id)
             {_, _} -> json(conn, %{user_id: user_id, status: :error, errors: [%{matching_id: "matching_id must be an integer"}]})
         end
     end
