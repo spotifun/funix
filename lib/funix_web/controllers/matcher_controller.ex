@@ -18,7 +18,7 @@ end
 
 defmodule FunixWeb.MatcherController do
     use FunixWeb, :controller
-    alias Funix.{Repo, Matcher}
+    alias Funix.{Repo, Matcher, Util}
     alias FunixWeb.MatcherDestroyer
 
     defp get_unique_random_id(random_number, matching_objects) when matching_objects == nil do
@@ -45,14 +45,14 @@ defmodule FunixWeb.MatcherController do
                 {:ok, _pid} = GenServer.start_link(MatcherDestroyer, [destroy_function])
                 json(conn, %{user_id: user_id, matching_id: matching_id, success: status})
             :error ->
-                errors = Matcher.translate_error(changeset.errors)
+                errors = Util.translate_error(changeset.errors)
                 json(conn, %{user_id: user_id, matching_id: matching_id, status: status, errors: errors})
         end
     end
 
     def match(conn, %{"user_id" => user_id, "matching_id" => matching_id}) do
         case Integer.parse(matching_id) do
-            {num, ""} ->
+            {_num, ""} ->
                 matching = Repo.get_by(Matcher, matching_id: matching_id)            
                 case matching do
                     nil -> 

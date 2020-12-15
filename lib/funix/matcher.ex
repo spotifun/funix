@@ -17,11 +17,4 @@ defmodule Funix.Matcher do
     |> unique_constraint(:matching_id, [name: :matchers_matching_id_index])
     |> unique_constraint(:user_id, [name: :matchers_user_id_index])
   end
-
-  def translate_error(errors) do
-    for error <- errors, do: %{elem(error, 0) => elem(elem(error, 1), 0)}
-  end
 end
-
-require Protocol
-Protocol.derive(Jason.Encoder, Funix.Matcher, only: [:matching_id, :user_id])
