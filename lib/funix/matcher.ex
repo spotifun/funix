@@ -15,7 +15,7 @@ defmodule Funix.Matcher do
     matcher
     |> cast(attrs, [:user_id, :matching_id])
     |> validate_required([:user_id, :matching_id])
-    |> unique_constraint(:matching_id, [name: :matchers_matching_id_index])
-    |> unique_constraint(:user_id, [name: :matchers_user_id_index])
+    |> unique_constraint(:matching_id, name: :matchers_matching_id_index)
+    |> unique_constraint(:user_id, name: :matchers_user_id_index)
   end
 end
