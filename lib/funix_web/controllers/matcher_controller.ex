@@ -49,4 +49,19 @@ defmodule FunixWeb.MatcherController do
                 json(conn, %{user_id: user_id, matching_id: matching_id, status: status, errors: errors})
         end
     end
+
+    def match(conn, %{"user_id" => user_id, "matching_id" => matching_id}) do
+        case Integer.parse(matching_id) do
+            {num, ""} ->
+                matching = Repo.get_by(Matcher, matching_id: matching_id)            
+                case matching do
+                    nil -> 
+                        json(conn, %{user_id: user_id, status: :no_match})
+                    _ ->
+                        json(conn, %{user_id: user_id, status: :matched, match_user_id: matching.user_id})
+                end
+            
+            {_, _} -> json(conn, %{user_id: user_id, status: :error, errors: [%{matching_id: "matching_id must be an integer"}]})
+        end
+    end
 end

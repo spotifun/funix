@@ -22,6 +22,7 @@ defmodule FunixWeb.Router do
   scope "/api", FunixWeb do
     pipe_through :api
     post "/matcher/generate", MatcherController, :generate
+    post "/matcher/match", MatcherController, :match
   end
 
   # Other scopes may use custom stacks.
