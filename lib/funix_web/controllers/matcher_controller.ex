@@ -18,7 +18,7 @@ end
 
 defmodule FunixWeb.MatcherController do
     use FunixWeb, :controller
-    alias Funix.{Repo, Matcher, Util}
+    alias Funix.{Repo, Matcher, Util, MatcherMatch}
     alias FunixWeb.MatcherDestroyer
 
     defp get_unique_random_id(random_number, matching_objects) when matching_objects == nil do
@@ -52,13 +52,21 @@ defmodule FunixWeb.MatcherController do
         end
     end
 
+    defp insert_match(conn, matching, user_id) do
+        {status, changeset} = Ecto.build_assoc(matching, :matcher_matches, %{user_id: user_id}) |> MatcherMatch.changeset(%{}) |> Repo.insert()
+        case status do
+            :ok -> json(conn, %{user_id: user_id, status: :matched, match_user_id: matching.user_id})
+            :error ->
+                errors = Util.translate_error(changeset.errors)
+                json(conn, %{user_id: user_id, status: status, errors: errors})
+        end
+    end
+
     defp match_user(conn, user_id, matching_id) do
         matching = Repo.get_by(Matcher, matching_id: matching_id)            
         case matching do
-            nil -> 
-                json(conn, %{user_id: user_id, status: :no_match})
-            _ ->
-                json(conn, %{user_id: user_id, status: :matched, match_user_id: matching.user_id})
+            nil -> json(conn, %{user_id: user_id, status: :no_match})
+            _ -> insert_match(conn, matching, user_id)
         end
     end
 
