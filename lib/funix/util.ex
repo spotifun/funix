@@ -10,7 +10,3 @@ defmodule Funix.Util do
     end
   end
 end
-
-require Protocol
-Protocol.derive(Jason.Encoder, Funix.Matcher, only: [:matching_id, :user_id])
-Protocol.derive(Jason.Encoder, Funix.MatcherMatch, only: [:user_id])

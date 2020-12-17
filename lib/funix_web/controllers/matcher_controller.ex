@@ -20,9 +20,20 @@ end
 defmodule FunixWeb.MatcherController do
   use FunixWeb, :controller
   alias Funix.{Repo, Matcher, Util, MatcherMatch, Constant}
-  alias FunixWeb.MatcherDestroyer
+  alias FunixWeb.{MatcherDestroyer, ServicesApi}
   import Ecto.Query
   import DateTime
+
+  defp seed_user_data(access_token, type) do
+    case ServicesApi.get_top_list(access_token, type) do
+      {:ok, spotify_data} ->
+        top_list_ids = spotify_data["items"] |> Enum.map(fn data -> data["id"] end)
+        {:ok, top_list_ids}
+
+      {:error, errors} ->
+        {:error, errors}
+    end
+  end
 
   defp user_exist_error() do
     %{user_id: "has already been taken"}
@@ -51,7 +62,7 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp is_user_valid(user_id, _access_token) do
+  defp user_validation(user_id, access_token) do
     is_user_in_matcher = is_user_in_table(user_id, Matcher)
     is_user_in_match = is_user_in_table(user_id, MatcherMatch)
 
@@ -59,7 +70,16 @@ defmodule FunixWeb.MatcherController do
       {:ok, false} ->
         case is_user_in_match do
           {:ok, false} ->
-            {:ok, true}
+            case seed_user_data(access_token, "artists") do
+              {:ok, artist_ids} ->
+                case seed_user_data(access_token, "tracks") do
+                  {:ok, track_ids} -> {:ok, {artist_ids, track_ids}}
+                  {:error, errors} -> {:error, errors}
+                end
+
+              {:error, errors} ->
+                {:error, errors}
+            end
 
           {:ok, true} ->
             {:error, [user_exist_error()]}
@@ -85,7 +105,7 @@ defmodule FunixWeb.MatcherController do
     get_unique_random_id(new_random_number, Repo.get_by(Matcher, matching_id: new_random_number))
   end
 
-  defp generate_matching_id(user_id) do
+  defp create_matcher(user_id, artist_ids, track_ids) do
     random_number = Enum.random(100_000..999_999)
 
     matching_id =
@@ -97,7 +117,12 @@ defmodule FunixWeb.MatcherController do
 
     case status do
       :ok ->
-        Ecto.build_assoc(changeset, :matcher_matches, %{user_id: user_id}) |> Repo.insert()
+        Ecto.build_assoc(changeset, :matcher_matches, %{
+          user_id: user_id,
+          artist_ids: artist_ids,
+          track_ids: track_ids
+        })
+        |> Repo.insert()
 
         destroy_function = fn ->
           Repo.delete(changeset, stale_error_field: :stale_error)
@@ -113,27 +138,28 @@ defmodule FunixWeb.MatcherController do
   end
 
   def generate(conn, %{"user_id" => user_id, "access_token" => access_token}) do
-    case is_user_valid(user_id, access_token) do
-      {:ok, _} -> json(conn, generate_matching_id(user_id))
+    case user_validation(user_id, access_token) do
+      {:ok, {artist_ids, track_ids}} -> json(conn, create_matcher(user_id, artist_ids, track_ids))
       {:error, errors} -> json(conn, %{user_id: user_id, status: :error, errors: errors})
     end
   end
 
-  defp insert_match(matching_id, user_id) do
+  defp insert_match(matching_id, user_id, artist_ids, track_ids) do
     matcher = Repo.get_by(Matcher, matching_id: matching_id)
 
-    {status, changeset} =
-      Ecto.build_assoc(matcher, :matcher_matches, %{user_id: user_id})
-      |> MatcherMatch.changeset(%{})
-      |> Repo.insert()
+    case Ecto.build_assoc(matcher, :matcher_matches, %{
+           user_id: user_id,
+           artist_ids: artist_ids,
+           track_ids: track_ids
+         })
+         |> MatcherMatch.changeset(%{})
+         |> Repo.insert() do
+      {:ok, _struct} ->
+        %{user_id: user_id, status: :ok, matcher_user_id: matcher.user_id}
 
-    case status do
-      :ok ->
-        %{user_id: user_id, status: status, matcher_user_id: matcher.user_id}
-
-      :error ->
+      {:error, changeset} ->
         errors = Util.translate_error(changeset.errors)
-        %{user_id: user_id, status: status, errors: errors}
+        %{user_id: user_id, status: :error, errors: errors}
     end
   end
 
@@ -156,11 +182,11 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp match_user(user_id, matching_id) do
+  defp match_user(user_id, matching_id, artist_ids, track_ids) do
     matcher_status = get_matcher_status(matching_id)
 
     case matcher_status do
-      :too_few -> insert_match(matching_id, user_id)
+      :too_few -> insert_match(matching_id, user_id, artist_ids, track_ids)
       :ok -> %{user_id: user_id, status: :full}
       _ -> %{user_id: user_id, status: matcher_status}
     end
@@ -173,9 +199,12 @@ defmodule FunixWeb.MatcherController do
       }) do
     case Integer.parse(matching_id) do
       {_num, ""} ->
-        case is_user_valid(user_id, access_token) do
-          {:ok, _} -> json(conn, match_user(user_id, matching_id))
-          {:error, errors} -> json(conn, %{user_id: user_id, status: :error, errors: errors})
+        case user_validation(user_id, access_token) do
+          {:ok, {artist_ids, track_ids}} ->
+            json(conn, match_user(user_id, matching_id, artist_ids, track_ids))
+
+          {:error, errors} ->
+            json(conn, %{user_id: user_id, status: :error, errors: errors})
         end
 
       {_, _} ->

@@ -1,14 +1,14 @@
 defmodule FunixWeb.ServicesApi do
   alias SpotifyApi.Base
 
-  def get_top_artists(access_token) do
-    url = Base.process_request_url("me/top/artists")
+  def get_top_list(access_token, type) do
+    url = Base.process_request_url("me/top/" <> type)
     headers = [Authorization: "Bearer " <> access_token]
 
     case HTTPoison.get(url, headers) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        top_artists = Poison.decode!(body)
-        {:ok, top_artists}
+        top_list = Poison.decode!(body)
+        {:ok, top_list}
 
       {:ok, %HTTPoison.Response{status_code: status_code}} ->
         {:error, [%{status_code: status_code}]}
