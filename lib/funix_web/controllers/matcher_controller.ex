@@ -23,17 +23,17 @@ defmodule FunixWeb.MatcherController do
   alias FunixWeb.MatcherDestroyer
   import Ecto.Query
 
-  defp is_user_exist(user_id) do
+  defp user_exist_error() do
+    %{user_id: "has already been taken"}
+  end
+
+  defp is_user_valid(user_id, _access_token) do
     match = Repo.get_by(MatcherMatch, user_id: user_id)
 
     case match do
-      nil -> false
-      _ -> true
+      nil -> {:ok, {}}
+      _ -> {:error, [user_exist_error()]}
     end
-  end
-
-  defp generate_user_exist_error(user_id) do
-    %{user_id: user_id, status: :error, errors: [%{user_id: "has already been taken"}]}
   end
 
   defp get_unique_random_id(random_number, matching_objects) when matching_objects == nil do
@@ -72,10 +72,10 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  def generate(conn, %{"user_id" => user_id}) do
-    case is_user_exist(user_id) do
-      false -> json(conn, generate_matching_id(user_id))
-      true -> json(conn, generate_user_exist_error(user_id))
+  def generate(conn, %{"user_id" => user_id, "access_token" => access_token}) do
+    case is_user_valid(user_id, access_token) do
+      {:ok, _} -> json(conn, generate_matching_id(user_id))
+      {:error, errors} -> json(conn, %{user_id: user_id, status: :error, errors: errors})
     end
   end
 
@@ -116,11 +116,7 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp match_user(user_id, _matching_id, is_user_id_exist) when is_user_id_exist do
-    generate_user_exist_error(user_id)
-  end
-
-  defp match_user(user_id, matching_id, _is_user_id_exist) do
+  defp match_user(user_id, matching_id) do
     matcher_status = get_matcher_status(matching_id)
 
     case matcher_status do
@@ -130,10 +126,17 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  def match(conn, %{"user_id" => user_id, "matching_id" => matching_id}) do
+  def match(conn, %{
+        "user_id" => user_id,
+        "access_token" => access_token,
+        "matching_id" => matching_id
+      }) do
     case Integer.parse(matching_id) do
       {_num, ""} ->
-        json(conn, match_user(user_id, matching_id, is_user_exist(user_id)))
+        case is_user_valid(user_id, access_token) do
+          {:ok, _} -> json(conn, match_user(user_id, matching_id))
+          {:error, errors} -> json(conn, %{user_id: user_id, status: :error, errors: errors})
+        end
 
       {_, _} ->
         json(conn, %{
