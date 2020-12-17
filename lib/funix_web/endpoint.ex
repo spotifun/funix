@@ -50,5 +50,10 @@ defmodule FunixWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug CORSPlug, origin: [
+    "http://localhost:3000",
+    "https://spotifun.laymonage.com",
+    "https://spotifun.netlify.app"
+  ]
   plug FunixWeb.Router
 end
