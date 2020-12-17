@@ -25,6 +25,7 @@ defmodule FunixWeb.Router do
     post "/matcher/match", MatcherController, :match
     get "/matcher/status", MatcherController, :get_status
     get "/matcher/matching_id", MatcherController, :get_matching_id
+    get "/matcher/recommendation", MatcherController, :get_recommendation
   end
 
   # Other scopes may use custom stacks.

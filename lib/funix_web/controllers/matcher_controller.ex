@@ -155,7 +155,7 @@ defmodule FunixWeb.MatcherController do
          |> MatcherMatch.changeset(%{})
          |> Repo.insert() do
       {:ok, _struct} ->
-        %{user_id: user_id, status: :ok, matcher_user_id: matcher.user_id}
+        %{user_id: user_id, status: :ok}
 
       {:error, changeset} ->
         errors = Util.translate_error(changeset.errors)
@@ -240,5 +240,32 @@ defmodule FunixWeb.MatcherController do
       [] -> json(conn, %{status: :error, errors: [%{user_id: "user_id not found"}]})
       [{matching_id} | _tail] -> json(conn, %{status: :ok, matching_id: matching_id})
     end
+  end
+
+  def get_recommendation(conn, %{"user_id" => user_id}) do
+    query =
+      from u in MatcherMatch,
+        join: v in MatcherMatch,
+        on: u.user_id == ^user_id,
+        on: v.matcher_id == u.matcher_id,
+        select: {v.artist_ids, v.track_ids}
+
+    struct = Repo.all(query)
+
+    accumulator_function = fn
+      {[f_ar | _t_ar], [f_tr | _t_tr]}, {acc_a, acc_t} -> {[f_ar | acc_a], [f_tr | acc_t]}
+      {_, _}, {acc_a, acc_t} -> {acc_a, acc_t}
+    end
+
+    {mixed_recommended_artist, mixed_recommended_tracks} =
+      List.foldr(struct, {[], []}, accumulator_function)
+
+    json(conn, %{
+      status: :ok,
+      seeds: %{
+        seed_artists: mixed_recommended_artist,
+        seed_tracks: mixed_recommended_tracks
+      }
+    })
   end
 end
