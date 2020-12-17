@@ -20,15 +20,26 @@ end
 defmodule FunixWeb.MatcherController do
   use FunixWeb, :controller
   alias Funix.{Repo, Matcher, Util, MatcherMatch, Constant}
-  alias FunixWeb.{MatcherDestroyer, ServicesApi}
+  alias FunixWeb.{MatcherDestroyer, ServiceApi}
   import Ecto.Query
   import DateTime
 
   defp seed_user_data(access_token, type) do
-    case ServicesApi.get_top_list(access_token, type) do
+    case ServiceApi.get_top_list(access_token, type) do
       {:ok, spotify_data} ->
         top_list_ids = spotify_data["items"] |> Enum.map(fn data -> data["id"] end)
         {:ok, top_list_ids}
+
+      {:error, errors} ->
+        {:error, errors}
+    end
+  end
+
+  defp get_spotify_user_id(access_token) do
+    case ServiceApi.get_user_info(access_token) do
+      {:ok, user_info} ->
+        user_id = user_info["id"]
+        {:ok, user_id}
 
       {:error, errors} ->
         {:error, errors}
@@ -75,7 +86,7 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp user_validation(user_id, _access_token) do
+  defp user_validation(user_id, access_token) do
     is_user_in_matcher = is_user_in_table(user_id, Matcher)
     is_user_in_match = is_user_in_table(user_id, MatcherMatch)
 
@@ -83,7 +94,16 @@ defmodule FunixWeb.MatcherController do
       {:ok, false} ->
         case is_user_in_match do
           {:ok, false} ->
-            {:ok, true}
+            case get_spotify_user_id(access_token) do
+              {:ok, spotify_user_id} ->
+                cond do
+                  spotify_user_id == user_id -> {:ok, true}
+                  true -> {:error, [%{user_id: "is not valid"}]}
+                end
+
+              {:error, errors} ->
+                {:error, errors}
+            end
 
           {:ok, true} ->
             {:error, [user_exist_error()]}
