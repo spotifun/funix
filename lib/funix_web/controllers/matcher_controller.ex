@@ -1,13 +1,13 @@
 defmodule FunixWeb.MatcherDestroyer do
   use GenServer
+  alias Funix.Constant
 
   def start_link(_name \\ nil) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
   def init([destroy_function]) do
-    # 2 minutes
-    Process.send_after(self(), :terminate_self, 2 * 60 * 1000)
+    Process.send_after(self(), :terminate_self, Constant.expire_duration())
     {:ok, [destroy_function]}
   end
 
@@ -19,20 +19,60 @@ end
 
 defmodule FunixWeb.MatcherController do
   use FunixWeb, :controller
-  alias Funix.{Repo, Matcher, Util, MatcherMatch}
+  alias Funix.{Repo, Matcher, Util, MatcherMatch, Constant}
   alias FunixWeb.MatcherDestroyer
   import Ecto.Query
+  import DateTime
 
   defp user_exist_error() do
     %{user_id: "has already been taken"}
   end
 
-  defp is_user_valid(user_id, _access_token) do
-    match = Repo.get_by(MatcherMatch, user_id: user_id)
+  defp is_user_in_table(user_id, table) do
+    case Repo.get_by(table, user_id: user_id) do
+      nil ->
+        {:ok, false}
 
-    case match do
-      nil -> {:ok, {}}
-      _ -> {:error, [user_exist_error()]}
+      struct ->
+        cond do
+          diff(now!("Etc/UTC"), from_naive!(struct.inserted_at, "Etc/UTC"), :millisecond) >
+              Constant.expire_duration() ->
+            case Repo.delete(struct, stale_error_field: :stale_error) do
+              {:ok, _struct} ->
+                {:ok, false}
+
+              {:error, changeset} ->
+                {:error, Util.translate_error(changeset.errors)}
+            end
+
+          true ->
+            {:ok, true}
+        end
+    end
+  end
+
+  defp is_user_valid(user_id, _access_token) do
+    is_user_in_matcher = is_user_in_table(user_id, Matcher)
+    is_user_in_match = is_user_in_table(user_id, MatcherMatch)
+
+    case is_user_in_matcher do
+      {:ok, false} ->
+        case is_user_in_match do
+          {:ok, false} ->
+            {:ok, true}
+
+          {:ok, true} ->
+            {:error, [user_exist_error()]}
+
+          {:error, errors} ->
+            {:error, errors}
+        end
+
+      {:ok, true} ->
+        {:error, [user_exist_error()]}
+
+      {:error, errors} ->
+        {:error, errors}
     end
   end
 
