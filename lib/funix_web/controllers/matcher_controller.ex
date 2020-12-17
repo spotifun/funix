@@ -62,7 +62,20 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp user_validation(user_id, access_token) do
+  defp get_user_data(access_token) do
+    case seed_user_data(access_token, "artists") do
+      {:ok, artist_ids} ->
+        case seed_user_data(access_token, "tracks") do
+          {:ok, track_ids} -> {:ok, {artist_ids, track_ids}}
+          {:error, errors} -> {:error, errors}
+        end
+
+      {:error, errors} ->
+        {:error, errors}
+    end
+  end
+
+  defp user_validation(user_id, _access_token) do
     is_user_in_matcher = is_user_in_table(user_id, Matcher)
     is_user_in_match = is_user_in_table(user_id, MatcherMatch)
 
@@ -70,16 +83,7 @@ defmodule FunixWeb.MatcherController do
       {:ok, false} ->
         case is_user_in_match do
           {:ok, false} ->
-            case seed_user_data(access_token, "artists") do
-              {:ok, artist_ids} ->
-                case seed_user_data(access_token, "tracks") do
-                  {:ok, track_ids} -> {:ok, {artist_ids, track_ids}}
-                  {:error, errors} -> {:error, errors}
-                end
-
-              {:error, errors} ->
-                {:error, errors}
-            end
+            {:ok, true}
 
           {:ok, true} ->
             {:error, [user_exist_error()]}
@@ -139,8 +143,17 @@ defmodule FunixWeb.MatcherController do
 
   def generate(conn, %{"user_id" => user_id, "access_token" => access_token}) do
     case user_validation(user_id, access_token) do
-      {:ok, {artist_ids, track_ids}} -> json(conn, create_matcher(user_id, artist_ids, track_ids))
-      {:error, errors} -> json(conn, %{user_id: user_id, status: :error, errors: errors})
+      {:ok, _} ->
+        case get_user_data(access_token) do
+          {:ok, {artist_ids, track_ids}} ->
+            json(conn, create_matcher(user_id, artist_ids, track_ids))
+
+          {:error, errors} ->
+            json(conn, %{user_id: user_id, status: :error, errors: errors})
+        end
+
+      {:error, errors} ->
+        json(conn, %{user_id: user_id, status: :error, errors: errors})
     end
   end
 
@@ -200,8 +213,14 @@ defmodule FunixWeb.MatcherController do
     case Integer.parse(matching_id) do
       {_num, ""} ->
         case user_validation(user_id, access_token) do
-          {:ok, {artist_ids, track_ids}} ->
-            json(conn, match_user(user_id, matching_id, artist_ids, track_ids))
+          {:ok, _} ->
+            case get_user_data(access_token) do
+              {:ok, {artist_ids, track_ids}} ->
+                json(conn, match_user(user_id, matching_id, artist_ids, track_ids))
+
+              {:error, errors} ->
+                json(conn, %{user_id: user_id, status: :error, errors: errors})
+            end
 
           {:error, errors} ->
             json(conn, %{user_id: user_id, status: :error, errors: errors})
