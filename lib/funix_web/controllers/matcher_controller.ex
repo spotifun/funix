@@ -271,13 +271,16 @@ defmodule FunixWeb.MatcherController do
       from m in Matcher,
         join: mm in MatcherMatch,
         on: mm.user_id == ^user_id,
-        select: {m.matching_id}
+        select: {m.matching_id, m.user_id}
 
     match = Repo.all(query)
 
     case match do
-      [] -> json(conn, %{status: :error, errors: [%{user_id: "user_id not found"}]})
-      [{matching_id} | _tail] -> json(conn, %{status: :ok, matching_id: matching_id})
+      [] ->
+        json(conn, %{status: :error, errors: [%{user_id: "user_id not found"}]})
+
+      [{matching_id, matcher_user_id} | _tail] ->
+        json(conn, %{status: :ok, matching_id: matching_id, is_owner: matcher_user_id == user_id})
     end
   end
 
