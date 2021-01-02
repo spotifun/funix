@@ -196,11 +196,12 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
-  defp get_matcher_status(matching_id) do
-    matcher =
-      Repo.get_by(Matcher, matching_id: matching_id)
-      |> Repo.preload(:matcher_matches)
+  defp get_matcher(matching_id) do
+    Repo.get_by(Matcher, matching_id: matching_id)
+    |> Repo.preload(:matcher_matches)
+  end
 
+  defp get_matcher_status(matcher) do
     matcher_size =
       case matcher do
         nil -> 0
@@ -215,8 +216,20 @@ defmodule FunixWeb.MatcherController do
     end
   end
 
+  defp get_matcher_expires_at(matcher) do
+    case matcher do
+      nil ->
+        nil
+
+      _ ->
+        from_naive!(matcher.inserted_at, "Etc/UTC")
+        |> DateTime.add(Constant.expire_duration(), :millisecond)
+    end
+  end
+
   defp match_user(user_id, matching_id, artist_ids, track_ids) do
-    matcher_status = get_matcher_status(matching_id)
+    matcher = get_matcher(matching_id)
+    matcher_status = get_matcher_status(matcher)
 
     case matcher_status do
       :too_few -> insert_match(matching_id, user_id, artist_ids, track_ids)
@@ -258,8 +271,10 @@ defmodule FunixWeb.MatcherController do
   def get_status(conn, %{"matching_id" => matching_id}) do
     case Util.is_integer(matching_id) do
       true ->
-        status = get_matcher_status(matching_id)
-        json(conn, %{matching_id: matching_id, status: status})
+        matcher = get_matcher(matching_id)
+        status = get_matcher_status(matcher)
+        expires_at = get_matcher_expires_at(matcher)
+        json(conn, %{matching_id: matching_id, status: status, expires_at: expires_at})
 
       false ->
         json(conn, %{status: :error, errors: [%{matching_id: "matching_id must be an integer"}]})
